@@ -18,7 +18,7 @@ else:
 dotenv.load_dotenv(os.path.join(base_dir, ".env"))
 
 # версия текущей сборки — повышать вручную, перед каждым релизом (git tag должен совпадать)
-APP_VERSION = "v2.5.8"
+APP_VERSION = "v2.5.9"
 GITHUB_REPO = "TeroBsass/trolling"
 # version.json лежит в корне репозитория и отдаётся сырым через raw.githubusercontent.com
 GITHUB_API_RELEASES = f"https://api.github.com/repos/{GITHUB_REPO}/releases"
@@ -212,6 +212,7 @@ class SIMPLE_COMMANDS:
     # вызова. Все флаги указаны в [--flag=<value>] — квадратные скобки, потому что
     # у каждой команды свои флаги на деле необязательны: если их не передать,
     # программа просто спросит значение через input() в интерактивном режиме.
+
     INFO_DICT = {
         "help":   {"desc": "Shows the list of all available commands.",
                    "usage": ["help"]},
@@ -250,12 +251,35 @@ class SIMPLE_COMMANDS:
         "ghwid":  {"desc": "Looks up a user's HWID using their name and password.",
                    "usage": ["ghwid [--name=<name>] [--pass=<password>]"]},
     }
-
+    ICONS = {
+        "help": "❓",
+        "exit": "🚪",
+        "clear": "🧹",
+        "cls": "🧹",
+        "info": "ℹ️",
+        "update": "🔄",
+        "export": "📤",
+        "import": "📥",
+        "scan": "🔍",
+        "chat": "💬",
+        "osint": "🕵️",
+        "dos": "🛡️",
+        "ghwid": "🪪",
+    }
     @staticmethod
     def info(args=None):
         flags = SIMPLE_COMMANDS.parse_flags(args=args, known={"com"})
-        command_name = (flags.get("com") or input("Enter the command name to get info: ")).strip().lower()
-
+        choices = [
+            questionary.Choice(f"{SIMPLE_COMMANDS.ICONS.get(c, '•')} {c}", value=str(c))
+            for c in SIMPLE_COMMANDS.INFO_DICT
+        ]
+        if "com" not in flags:
+            command_name = questionary.select("Command list:", choices).ask()
+            if not command_name:
+                console_start()
+                return
+        else:
+            command_name = flags.get("com").strip().lower()
         entry = SIMPLE_COMMANDS.INFO_DICT.get(command_name)
         if not entry:
             known = ", ".join(sorted(SIMPLE_COMMANDS.INFO_DICT))
@@ -698,7 +722,7 @@ class CHAT:
                 print(note_1 or note_2)
                 return
 
-            choice = questionary.select("Список чатов", choices=choices).ask()
+            choice = questionary.select("Chats list:", choices=choices).ask()
             if not choice:
                 return
 
