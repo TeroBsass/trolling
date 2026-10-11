@@ -18,7 +18,7 @@ else:
 dotenv.load_dotenv(os.path.join(base_dir, ".env"))
 
 # версия текущей сборки — повышать вручную, перед каждым релизом (git tag должен совпадать)
-APP_VERSION = "v2.5.7"
+APP_VERSION = "v2.5.8"
 GITHUB_REPO = "TeroBsass/trolling"
 # version.json лежит в корне репозитория и отдаётся сырым через raw.githubusercontent.com
 GITHUB_API_RELEASES = f"https://api.github.com/repos/{GITHUB_REPO}/releases"
@@ -128,7 +128,7 @@ class SIMPLE_COMMANDS:
     @staticmethod
     def cprint(text: str):
         """Замена print() для использования внутри patch_stdout() — корректно
-        проявляет цвета colorama (Fore/Style), которые сырой print() внутри
+        проявляет цвета Colorama (Fore/Style), которые сырой print() внутри
         patch_stdout просто печатает как текст escape-кодов."""
         print_formatted_text(ANSI(text))
 
@@ -224,7 +224,7 @@ class SIMPLE_COMMANDS:
         "info":   {"desc": "Shows this kind of detailed information about a specific command.",
                    "usage": ["info [--com=<command>]"]},
         "update": {"desc": "Checks GitHub for a newer release and installs it if one is found.",
-                   "usage": ["update"]},
+                   "usage": ["update [--full] [--auto]"]},
         "export": {"desc": "Exports your findings to a local .json file.",
                    "usage": ["export [--file_name=<name>]"]},
         "import": {"desc": "Imports data from a local .json file (created by 'export').",
@@ -233,7 +233,15 @@ class SIMPLE_COMMANDS:
                    "usage": ["scan users", "scan more [--name=<name>]"]},
         "chat":   {"desc": "Sends messages to other users and reads the messages sent to you.",
                    "usage": ["chat send [--name=<name>] [--mes=<message>]",
-                             "chat my [--waiter=<seconds>] [--by_name=<name>]"]},
+                             "chat my [--waiter=<seconds>] [--by_name=<name>]",
+                             "chat mode [--sw=on/off]",
+                             "chat open [--pm=<personal messages>] [--group=<group_id>]",
+                             "chat gid [--name=<group_name>]",
+                             "chat make [--name=<group_name>] [--members=(<members>)]",
+                             "chat delete [--name=<group_name>] [--id=<group_id>]",
+                             "chat add_mem [--name=<name>] [--id=<group_id>]",
+                             "chat del_mem [--name=<name>] [--id=<group_id>]",
+                             ]},
         "osint":  {"desc": "Looks up a user's password by name. Note: this also reveals your own "
                            "password to whoever runs it against you, to keep the process fair.",
                    "usage": ["osint [--name=<name>] [--power=<1-5>]"]},
@@ -517,6 +525,7 @@ class CHAT:
     PM_NAME = None
     GROUP_NAME = None
     session = PromptSession(erase_when_done=True)
+    CLIENT_LOCK = threading.RLock()
 
     #the watcher of messages
     @staticmethod
@@ -545,10 +554,12 @@ class CHAT:
     def loop(type_:str):
         name = CHAT.PM_NAME if type_ == "pm" else CHAT.GROUP_NAME
         SIMPLE_COMMANDS.cprint(f"{Fore.BLUE}--- Chat with {name} opened. ---{Style.RESET_ALL}")
-        client.not_read(str(safe_get_hwid()), name, type_)
+        with CHAT.CLIENT_LOCK:
+            client.not_read(str(safe_get_hwid()), name, type_)
         stop_event_2 = threading.Event()
-        watcher_thread_ = threading.Thread(target=CHAT.chat_watcher, args=(stop_event,), daemon=True)
+        watcher_thread_ = threading.Thread(target=CHAT.chat_watcher, args=(stop_event_2,), daemon=True)
         watcher_thread_.start()
+
 
         with patch_stdout():
             try:
@@ -579,23 +590,27 @@ class CHAT:
 
     @staticmethod
     def pm_check(name):
-        return client.pm_checker(name, str(safe_get_hwid()), check=True)
+        with CHAT.CLIENT_LOCK:
+            return client.pm_checker(name, str(safe_get_hwid()), check=True)
 
     @staticmethod
     def group_check(name):
-        return client.check_group_mes(str(safe_get_hwid()), name, True)
+        with CHAT.CLIENT_LOCK:
+            return client.check_group_mes(str(safe_get_hwid()), name, True)
 
     @staticmethod
     def handle_results(type_2, name):
         if type_2 == "a":
-            mes = client.pm_checker(name, str(safe_get_hwid()), check=False)
+            with CHAT.CLIENT_LOCK:
+                mes = client.pm_checker(name, str(safe_get_hwid()), check=False)
             if mes:
                 for text in mes:
                     # if name == client.get_name(safe_get_hwid()):
                     #     continue
                     SIMPLE_COMMANDS.cprint(f"{Fore.BLUE}{name}{Style.RESET_ALL}>>{text}")
         elif type_2 == "b":
-            mes = client.check_group_mes(str(safe_get_hwid()), name, False)
+            with CHAT.CLIENT_LOCK:
+                mes = client.check_group_mes(str(safe_get_hwid()), name, False)
             if mes:
                 for text in mes:
                     text = text.split("->", 1)
@@ -670,7 +685,8 @@ class CHAT:
             CHAT.GROUP_NAME, CHAT.START_GROUP_SESSION = group, True
             CHAT.loop(type_="group")
         else:
-            result = client.get_cs(str(safe_get_hwid()))
+            with CHAT.CLIENT_LOCK:
+                result = client.get_cs(str(safe_get_hwid()))
             if result is None:
                 return
             pms, gps, note_1, note_2 = result
@@ -712,12 +728,12 @@ class CHAT:
 class DOS:
     @staticmethod
     def shutdown_user(hw):
-        client.update_data(hw, True, "shutdown", "True")
+        client.update_data(hwid=str(safe_get_hwid()), dos=True, ch="shutdown", val="True", target_hwid=hw)
         print(f"[SYSTEM]:{Fore.GREEN}User with HWID {hw} has been marked for shutdown.{Style.RESET_ALL}")
 
     @staticmethod
     def restart_user(hw):
-        client.update_data(hw, True, "restart", "True")
+        client.update_data(hwid=str(safe_get_hwid()), dos=True, ch="restart", val="True", target_hwid=hw)
         print(f"[SYSTEM]:{Fore.GREEN}User with HWID {hw} has been marked for restart.{Style.RESET_ALL}")
 
 # класс для работы с SCAN функциями
@@ -818,7 +834,10 @@ def update(args=None):
     работу — закрытие текущего процесса, замену файлов, перезапуск
     приложения — делает сам инсталлятор (CloseApplications / RestartApplications),
     поэтому никакой ручной возни с переименованием exe и батниками не нужно."""
- 
+    flags = SIMPLE_COMMANDS.parse_flags(args, known={"auto", "full"})
+    full = True if "full" in flags else False
+    auto = True if "auto" in flags else False
+
     def _fetch_releases():
         req = urllib.request.Request(
             GITHUB_API_RELEASES,
@@ -838,7 +857,8 @@ def update(args=None):
     # МАКСИМАЛЬНЫМ номером версии по тегу — а не тот, что GitHub считает
     # "latest" (это разные вещи, см. пояснение в шапке файла).
     candidates = []
-    # print(f"{Fore.YELLOW}--- Releases seen from GitHub API ---{Style.RESET_ALL}")
+    if full:
+        print(f"{Fore.YELLOW}--- Releases seen from GitHub API ---{Style.RESET_ALL}")
     for r in all_releases:
         tag = r.get("tag_name", "")
         flags = []
@@ -848,14 +868,18 @@ def update(args=None):
             flags.append("PRERELEASE")
  
         if flags:continue
-            # print(f"  {tag!r} — SKIPPED ({', '.join(flags)})")
+        if full:
+            print(f"  {tag!r} — SKIPPED ({', '.join(flags)})")
         try: parsed = SIMPLE_COMMANDS._parse_version(tag)
         except (ValueError, AttributeError) as e:
-            # print(f"  {tag!r} — SKIPPED (couldn't parse as version: {e})")
+            if full:
+                print(f"  {tag!r} — SKIPPED (couldn't parse as version: {e})")
             continue  # тег не похож на версию (X.Y.Z) — пропускаем
-        # print(f"  {tag!r} — OK, parsed as {parsed}")
+        if full:
+            print(f"  {tag!r} — OK, parsed as {parsed}")
         candidates.append((parsed, r))
-    # print(f"{Fore.YELLOW}--------------------------------------{Style.RESET_ALL}")
+    if full:
+        print(f"{Fore.YELLOW}--------------------------------------{Style.RESET_ALL}")
     if not candidates:
         print(f"{Fore.RED}No valid published releases found on GitHub.{Style.RESET_ALL}")
         console_start()
@@ -879,20 +903,20 @@ def update(args=None):
         console_start()
         return
 
-    ver_new = SIMPLE_COMMANDS._ver(remote_version, Fore.GREEN)
-    ver_cur = SIMPLE_COMMANDS._ver(APP_VERSION, Fore.MAGENTA)
-    print(f"{Fore.YELLOW}New version available: v{ver_new}{Fore.YELLOW} (you have {ver_cur}{Fore.YELLOW}){Style.RESET_ALL}")
+    ver_new = f"{SIMPLE_COMMANDS._ver(remote_version, Fore.GREEN)}"
+    ver_cur = f"v{SIMPLE_COMMANDS._ver(APP_VERSION, Fore.MAGENTA)}"
+    print(f"{Fore.YELLOW}New version available: {ver_new}{Fore.YELLOW} (you have {ver_cur}{Fore.YELLOW}){Style.RESET_ALL}")
     if release.get("body"):
-        SIMPLE_COMMANDS._print_boxed(f"What's new in v{remote_version}", release["body"], color=Fore.GREEN)
+        SIMPLE_COMMANDS._print_boxed(f"What's new in {remote_version}", release["body"], color=Fore.GREEN)
 
     if not getattr(sys, "frozen", False):
         print(f"{Fore.YELLOW}Running from source — just 'git pull' instead of self-updating.{Style.RESET_ALL}")
         console_start()
         return
- 
-    if input("Download and install the update now? (y/n): ").strip().lower() != "y":
-        console_start()
-        return
+    if not auto:
+        if input("Download and install the update now? (y/n): ").strip().lower() != "y":
+            console_start()
+            return
  
     setup_path = os.path.join(tempfile.gettempdir(), "MarkSetup.exe")
  
@@ -1141,13 +1165,13 @@ def chat(args=None):
         else:
             argums = None
         CHAT.open_(argums)
-    elif act == "add":
+    elif act == "add_mem":
         if leng > 1:
             argums = parts[1:]
         else:
             argums = None
         CHAT.add_mem(argums)  
-    elif act == "del":
+    elif act == "del_mem":
         if leng > 1:
             argums = parts[1:]
         else:
@@ -1185,9 +1209,10 @@ def scan(args=None):
 def dos(args=None):
     flags = SIMPLE_COMMANDS.parse_flags(args, known={"hwid", "act"})
     hw = flags.get("hwid") or input("Enter the HWID to search for: ")
-    if hwid == safe_get_hwid():
+    if hw == str(safe_get_hwid()):
         SIMPLE_COMMANDS.cprint(f"{Fore.RED}You cant dos yourself!!!{Style.RESET_ALL}")
         console_start()
+        return
     act = flags.get("act") or input("What you want to do with this user: ")
     client.dos_(hw, act)
     console_start()

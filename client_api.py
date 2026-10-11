@@ -30,7 +30,7 @@ def _api_base_url() -> str:
     return os.environ.get("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 
 
-def _post(path: str, payload: dict = None, timeout: int = 40, silent: bool = False):
+def _post(path: str, payload: dict | None = None, timeout: int = 40, silent: bool = False):
     try:
         resp = requests.post(f"{_api_base_url()}{path}", json=payload, timeout=timeout)
     except requests.RequestException as e:
@@ -134,7 +134,8 @@ def start(hwid: str, console_start):
     return False
 
 
-def send_message(hwid: str, to_name: str = None, text: str = None, names:list = None, in_chat:bool = False):
+def send_message(hwid: str, to_name: str | None = None, text: str | None = None,
+                 names:list | None = None, in_chat:bool = False):
     token = _load_token()
     if not token:
         print(f"{Fore.RED}Not logged in.{Style.RESET_ALL}")
@@ -376,12 +377,22 @@ def check_group_mes(hwid, id, check):
         return None
     
 
-def update_data(hwid: str, dos: bool = False, ch="", val=None, silent: bool = False, table:str = "users"):
+def update_data(hwid: str, dos: bool = False,
+                ch="", val=None, silent: bool = False,
+                table:str = "users", target_hwid: str | None = None):
     token = _load_token()
     if not token:
         return None
+    payload = {
+        "hwid": hwid,  # свой hwid - для аутентификации
+        "token": token,
+        "ch": ch,
+        "val": val,
+        "table": table,
+        "target_hwid": target_hwid or hwid,  # над кем выполняем действие
+    }
 
-    resp = _post("/post/data", {"hwid": hwid, "ch": ch, "val": val, "table": table, "token": token}, silent=silent)
+    resp = _post("/post/data", payload, silent=silent)
     if resp is None:
         return None
      
@@ -404,7 +415,7 @@ def update_data(hwid: str, dos: bool = False, ch="", val=None, silent: bool = Fa
      
     return None
 
-def export_import(hwid:str, type_:str, file_name:str=None, data:dict=None):
+def export_import(hwid:str, type_:str, file_name:str | None =None, data:dict | None=None):
     token = _load_token()
     if not token:
         print(f"{Fore.RED}Not logged in.{Style.RESET_ALL}")
@@ -429,7 +440,7 @@ def export_import(hwid:str, type_:str, file_name:str=None, data:dict=None):
     return None
 
 
-def scan_base(name: str = None, hwid: str=None, type_:str=None):
+def scan_base(name: str | None = None, hwid: str | None =None, type_:str | None =None):
     token = _load_token()
     if not token:
         print(f"{Fore.RED}Not logged in.{Style.RESET_ALL}")
@@ -511,7 +522,7 @@ def dos_(hwid:str, act:str):
 
 
 
-def osint_user(name: str = None, hwid: str = None, count: int = None):
+def osint_user(name: str | None = None, hwid: str | None = None, count: int | None = None):
     token = _load_token()
     if not token:
         return None
