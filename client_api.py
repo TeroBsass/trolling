@@ -273,8 +273,11 @@ def pm_checker(name, hwid, check):
     if not token:
         return None
     
-    resp = _post("/chat/pm", {"hwid": hwid, "name": name, "check": check})
+    resp = _post("/chat/pm", {"hwid": hwid, "name": name, "check": check, "token": token})
     if resp is None:
+        return False
+    if resp.status_code != 200:
+        print(f"{Fore.RED}{resp.json().get('detail', 'Error')}{Style.RESET_ALL}")
         return False
     mes = resp.json()
     if mes:
@@ -519,6 +522,16 @@ def dos_(hwid:str, act:str):
     else:
         print(f"{Fore.RED}Unknown action: {act}{Style.RESET_ALL}")
         return None
+
+def dmbi(mes_ids: list):
+    token = _load_token()
+    if not token:
+        return None
+
+    resp = _post("/messages/del", {"mes_ids": mes_ids})
+    if resp is None:
+        return None
+    return None
 
 
 

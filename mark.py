@@ -18,7 +18,7 @@ else:
 dotenv.load_dotenv(os.path.join(base_dir, ".env"))
 
 # версия текущей сборки — повышать вручную, перед каждым релизом (git tag должен совпадать)
-APP_VERSION = "v2.5.9"
+APP_VERSION = "v2.6"
 GITHUB_REPO = "TeroBsass/trolling"
 # version.json лежит в корне репозитория и отдаётся сырым через raw.githubusercontent.com
 GITHUB_API_RELEASES = f"https://api.github.com/repos/{GITHUB_REPO}/releases"
@@ -488,9 +488,9 @@ class CHAT:
                 names.remove(own_name)
                 SIMPLE_COMMANDS.cprint(f"{Fore.RED}You can't send messages for yourself!!!!{Style.RESET_ALL}")
                 return
-        if name == own_name:
-            SIMPLE_COMMANDS.cprint(f"{Fore.RED}You can't send messages for yourself!!!{Style.RESET_ALL}")
-            return
+        # if name == own_name:
+        #     SIMPLE_COMMANDS.cprint(f"{Fore.RED}You can't send messages for yourself!!!{Style.RESET_ALL}")
+        #     return
 
         client.send_message(str(safe_get_hwid()), name, message, names)
 
@@ -512,32 +512,29 @@ class CHAT:
             use_delay = False
 
         name = flags.get("by_name") or None
-
         hw = safe_get_hwid()
         if hw is None:
             return False
+        else:
+            hw = str(hw)
 
-        raw = client.read_messages(hw)
-        string_undel = ""
-        if raw:
+        msgs = client.read_messages(hw)
+        del_ids = []
+        if msgs:
             print(f"{Fore.GREEN}Your messages:{Style.RESET_ALL}")
-            for i in raw.split(';'):
-                i = i.strip()
+            for i in msgs:
                 if not i:
                     continue
-                parts = i.split('->', 1)
-                if len(parts) != 2:
-                    continue
-                sender, text = parts
+                sender = i["sender"]
                 if name and sender != name:
-                   string_undel += f"{sender}->{text};"
                    continue
-                print(f"{Fore.BLUE}{sender}{Style.RESET_ALL}>>{text}")
+                del_ids.append(i["id"])
+                print(f"{Fore.BLUE}{sender}{Style.RESET_ALL}>>{i["message"]}")
                 if use_delay:
                     time.sleep(amount)
             print(f"{Fore.YELLOW}All messages displayed and read.{Style.RESET_ALL}")
-            if name:
-                client.update_data(hw, ch="message", val=string_undel)
+            if del_ids:
+                client.dmbi(del_ids)
             return None
         else:
             print(f"{Fore.YELLOW}No messages found for your account.{Style.RESET_ALL}")
@@ -636,11 +633,12 @@ class CHAT:
             with CHAT.CLIENT_LOCK:
                 mes = client.check_group_mes(str(safe_get_hwid()), name, False)
             if mes:
-                for text in mes:
-                    text = text.split("->", 1)
-                    if text[0] == client.get_name(str(safe_get_hwid())):
+                for m in mes:
+                    sender = m[0]
+                    text = m[1]
+                    if sender == client.get_name(str(safe_get_hwid())):
                         continue
-                    SIMPLE_COMMANDS.cprint(f"{Fore.BLUE}{text[0]}{Style.RESET_ALL}>>{text[1]}")
+                    SIMPLE_COMMANDS.cprint(f"{Fore.BLUE}{sender}{Style.RESET_ALL}>>{text}")
     @staticmethod
     def switch_mode(args=None):
         flags = SIMPLE_COMMANDS.parse_flags(args, known={"sw"})
@@ -673,7 +671,7 @@ class CHAT:
         id = flags.get("id") or input("Enter group's id: ")
         sure = input("Are you sure? (y/N): ")
         if sure.lower() == "y":
-            client.delete_group_(name, id, safe_get_hwid())
+            client.delete_group_(name, id, str(safe_get_hwid()))
         elif sure.lower() == "n":
             return
         else:
